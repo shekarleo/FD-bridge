@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FD Bridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: phone-first single column (needs, results, then FD and bank settings).
+   From 900px: inputs on the left, results on the right. Two tabs: calculator and problem statement. */
+:root {
+  --bg: #F1F4F8;
+  --surface: #FFFFFF;
+  --surface-2: #E8EDF4;
+  --ink: #0E2038;
+  --ink-2: #4B5C74;
+  --line: #D3DBE6;
+  --track: #E1E7F0;
+  --loan: #0B5CAD;
+  --break: #B85A16;
+  --pl: #A33A74;
+  --brand: #0B5CAD;
+  --on-accent: #FFFFFF;
+  --font-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A1422; --surface: #111F33; --surface-2: #182A44; --ink: #E6EDF7; --ink-2: #9FB1C8;
+    --line: #263A57; --track: #1E3250; --loan: #5AA2F0; --break: #F0A04B; --pl: #E58AB8;
+    --brand: #5AA2F0; --on-accent: #0A1424; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A1422; --surface: #111F33; --surface-2: #182A44; --ink: #E6EDF7; --ink-2: #9FB1C8;
+  --line: #263A57; --track: #1E3250; --loan: #5AA2F0; --break: #F0A04B; --pl: #E58AB8;
+  --brand: #5AA2F0; --on-accent: #0A1424; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.page {
+  max-width: 1120px; margin: 0 auto; padding-block: 20px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* header + tabs */
+.top { display: flex; align-items: center; gap: 12px; }
+.mark { flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--brand); color: var(--on-accent); display: grid; place-items: center; }
+.mark svg { width: 24px; height: 24px; }
+.top h1 { font-size: 24px; line-height: 1.1; }
+.top p { color: var(--ink-2); font-size: 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 18px 0 20px; overflow-x: auto; }
+.tab { background: none; border: 0; padding: 10px 14px; font-weight: 600; color: var(--ink-2); border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand); }
+
+/* calculator column: one narrow column, like a phone screen */
+.calc { max-width: 720px; margin: 0 auto; display: grid; gap: 16px; }
+.calc > * { min-width: 0; }
+
+/* simple option rows */
+.so-list { display: grid; gap: 10px; }
+.so { --c: var(--loan); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 10px; min-width: 0; }
+.so[data-opt="brk"] { --c: var(--break); }
+.so[data-opt="pl"] { --c: var(--pl); }
+.so[data-best="true"] { border-color: var(--c); box-shadow: 0 0 0 2px var(--c); }
+.so[data-na="true"] { background: var(--surface-2); }
+.so[data-opt="brk"] .sw { border-top-style: dashed; }
+.so[data-opt="pl"] .sw { border-top-style: dotted; }
+.so-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.so-top h3 { font-size: 17px; flex: 1 1 auto; min-width: 0; }
+.so-cost { margin-left: auto; text-align: right; font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.so-cost small { display: block; font-family: var(--font-body); font-weight: 400; font-size: 12px; color: var(--ink-2); }
+.so-why { font-size: 14px; color: var(--ink-2); }
+.flip { font-size: 16px; line-height: 1.5; }
+.link.inline { display: inline; font-size: inherit; }
+.good h2 { font-size: 17px; margin-bottom: 10px; }
+.good ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14.5px; }
+.fold.sub { background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.fold.sub > summary { padding: 14px 0; }
+.fold.sub .fold-body { padding: 0 0 14px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 0; }
+.h-sm { font-size: 18px; margin-bottom: 14px; }
+.hint { font-size: 13px; color: var(--ink-2); }
+.note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+
+/* need controls */
+.ctl + .ctl { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.ctl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ctl-head label, .ctl-head .lab { font-weight: 600; }
+.big { font-family: var(--font-display); font-weight: 700; font-size: 28px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+input[type="range"] { width: 100%; height: 30px; margin: 6px 0 2px; accent-color: var(--brand); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--brand); color: var(--on-accent); border-color: var(--brand); }
+
+/* folds */
+.fold { padding: 0; }
+.fold > summary { list-style: none; cursor: pointer; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; border-radius: var(--radius); }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fold-title::after { content: "Edit"; font-family: var(--font-body); font-weight: 600; font-size: 13px; color: var(--brand); }
+.fold[open] .fold-title::after { content: "Close"; }
+.fold-sum { font-size: 13px; color: var(--ink-2); }
+.fold-body { padding: 0 18px 18px; display: grid; gap: 14px; }
+.fields { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.field label { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.field input { height: 40px; width: 100%; min-width: 0; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.check input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--brand); flex: none; }
+.link { background: none; border: 0; color: var(--brand); font-weight: 600; cursor: pointer; padding: 0; justify-self: start; }
+
+/* verdict */
+.verdict { --v-bg: var(--loan); background: var(--v-bg); color: var(--on-accent); border-radius: var(--radius); padding: 22px; display: grid; gap: 10px; }
+.verdict[data-tone="brk"] { --v-bg: var(--break); }
+.verdict[data-tone="pl"] { --v-bg: var(--pl); }
+.verdict[data-tone="close"] { --v-bg: var(--ink); color: var(--bg); }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.9; }
+.verdict h2 { font-size: clamp(24px, 5vw, 32px); line-height: 1.12; }
+.save { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.save-num { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 8vw, 46px); line-height: 1; font-variant-numeric: tabular-nums; }
+.verdict .sub { opacity: 0.92; }
+
+/* option cards */
+.options { display: grid; gap: 12px; }
+.opt { --c: var(--loan); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+.opt[data-opt="brk"] { --c: var(--break); }
+.opt[data-opt="pl"] { --c: var(--pl); }
+.opt[data-best="true"] { border-color: var(--c); box-shadow: 0 0 0 2px var(--c); }
+.opt[data-na="true"] { background: var(--surface-2); }
+.opt-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.opt-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.opt-name h3 { font-size: 17px; }
+.sw { display: inline-block; width: 24px; height: 0; border-top: 3px solid var(--c); border-radius: 2px; flex: none; }
+.opt[data-opt="brk"] .sw, .sw.brk { border-top-style: dashed; }
+.opt[data-opt="pl"] .sw, .sw.pl { border-top-style: dotted; }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; background: var(--c); color: var(--on-accent); padding: 2px 8px; border-radius: 999px; }
+.tag.na { background: var(--track); color: var(--ink-2); }
+.opt-cost { text-align: right; display: grid; justify-items: end; }
+.cost { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.eff { font-size: 12.5px; color: var(--ink-2); }
+.bar { height: 10px; background: var(--track); border-radius: 999px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--c); border-radius: 999px; }
+@media (prefers-reduced-motion: no-preference) { .bar > span { transition: width 0.3s ease; } }
+.lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lines li { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.l-main { display: grid; min-width: 0; }
+.l-sub { font-size: 12.5px; color: var(--ink-2); }
+.l-val { font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+.foot { font-size: 13.5px; color: var(--ink-2); }
+.fdline { font-size: 13.5px; }
+.fdline strong { font-variant-numeric: tabular-nums; }
+
+/* chart */
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 8px; font-size: 13px; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend .sw { --c: var(--loan); }
+.legend .sw.brk { --c: var(--break); }
+.legend .sw.pl { --c: var(--pl); }
+.chart { width: 100%; min-width: 0; }
+.chart svg { display: block; max-width: 100%; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { stroke: var(--ink-2); stroke-width: 1; }
+.chart .ax { fill: var(--ink-2); font-size: 11.5px; font-family: var(--font-body); font-variant-numeric: tabular-nums; }
+.chart .lbl { fill: var(--ink); font-size: 11.5px; font-weight: 600; font-family: var(--font-body); }
+.chart .ref { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 4; }
+.chart .ref-you { stroke: var(--ink); stroke-width: 1.5; }
+.chart .ln { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.chart .s-loan { stroke: var(--loan); }
+.chart .s-brk { stroke: var(--break); stroke-dasharray: 8 6; }
+.chart .s-pl { stroke: var(--pl); stroke-dasharray: 0.5 7; }
+.chart .mk { fill: var(--surface); stroke-width: 2.5; }
+.chart .mk-loan { stroke: var(--loan); }
+.chart .mk-brk { stroke: var(--break); }
+.chart .mk-pl { stroke: var(--pl); }
+
+/* actions */
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { min-height: 46px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; cursor: pointer; flex: 1 1 220px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--on-accent); }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.fine { font-size: 12.5px; color: var(--ink-2); }
+
+/* problem tab */
+.prose { display: grid; gap: 28px; }
+.prose-in { display: grid; gap: 12px; min-width: 0; }
+.prose h2 { font-size: 24px; }
+.prose p, .prose li { max-width: 68ch; }
+.prose ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.lede { font-size: 17px; line-height: 1.55; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.flow li { max-width: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 4px; align-content: start; }
+.step-n { font-family: var(--font-display); font-weight: 700; color: var(--brand); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+.flow h3 { font-size: 16px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 900px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); border-radius: 10px; padding: 14px 16px; overflow-x: auto; white-space: pre; line-height: 1.75; max-width: 900px; }
+</style>
+<style>
+:root { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+  <header class="top">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M5 18c0-5.5 3-9 7-9s7 3.5 7 9"/><path d="M12 9v9"/></svg>
+    </div>
+    <div>
+      <h1>FD Bridge</h1>
+      <p>Need cash for a short time? Compare the cost before you close your FD.</p>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="tab-calculator" aria-controls="view-calculator" aria-selected="true" data-tab="calculator" type="button">Calculator</button>
+    <button class="tab" role="tab" id="tab-problem" aria-controls="view-problem" aria-selected="false" tabindex="-1" data-tab="problem" type="button">Problem and logic</button>
+  </div>
+
+  <main>
+    <!-- ================= CALCULATOR ================= -->
+    <section id="view-calculator" class="calc" role="tabpanel" aria-labelledby="tab-calculator">
+      <section class="panel" aria-labelledby="needs-h">
+        <h2 class="h-sm" id="needs-h">How much do you need, and for how long?</h2>
+        <div class="ctl">
+          <div class="ctl-head"><label for="amount">Amount</label><output id="amount-out" class="big" for="amount"></output></div>
+          <input id="amount" type="range" min="10000" max="1000000" step="10000" value="900000">
+          <div class="chips" id="amount-chips"></div>
+          <p class="hint" id="amount-hint"></p>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="days">For how long</label><output id="days-out" class="big" for="days"></output></div>
+          <input id="days" type="range" min="1" max="730" step="1" value="60">
+          <div class="chips" id="days-chips"></div>
+          <p class="hint" id="days-hint"></p>
+        </div>
+      </section>
+
+      <section id="verdict" class="verdict" data-tone="loan"></section>
+      <div id="simple-options" class="so-list"></div>
+      <p class="flip" id="flip"></p>
+      <p class="fine" id="taxline"><span id="tax-text"></span> <button class="link inline" id="tax-change" type="button">Change</button></p>
+
+      <div class="actions" id="actions">
+        <button class="btn" id="btn-loan" type="button"></button>
+        <button class="btn" id="btn-brk" type="button"></button>
+      </div>
+      <p class="note" id="cta-note" role="status"></p>
+
+      <section class="panel good" aria-labelledby="good-h">
+        <h2 id="good-h">Good to know</h2>
+        <ul>
+          <li>If you borrow, your FD is held as security until you repay. You cannot break it in the meantime.</li>
+          <li>Repay before your FD ends. If you do not, the bank takes the loan amount from the FD.</li>
+          <li>A loan makes you repay, so your savings get rebuilt. A closed FD often never gets rebuilt.</li>
+        </ul>
+      </section>
+
+      <details class="panel fold" id="work-fold">
+        <summary><span class="fold-title">See how this is worked out</span><span class="fold-sum">Costs line by line, a chart, your tax band and the bank's assumptions.</span></summary>
+        <div class="fold-body">
+          <div class="ctl">
+            <div class="ctl-head"><span class="lab" id="tax-label">Your income tax band</span></div>
+            <div class="chips" id="tax-chips" role="group" aria-labelledby="tax-label"></div>
+            <p class="hint">FD interest is taxed at your band. Interest on a loan for personal use gets no tax relief. So your band can change which option is cheaper.</p>
+          </div>
+
+          <div id="options" class="options"></div>
+
+          <section aria-labelledby="chart-h">
+            <h3 class="h-sm" id="chart-h">How the cost grows with the days</h3>
+            <div class="legend" id="legend"></div>
+            <div id="chart" class="chart"></div>
+            <p class="note" id="chart-note"></p>
+          </section>
+
+          <details class="fold sub" id="fd-fold">
+            <summary><span class="fold-title">Your fixed deposit</span><span class="fold-sum" id="fd-sum"></span></summary>
+            <div class="fold-body">
+              <div class="fields">
+                <div class="field"><label for="f-P">FD amount (₹)</label><input id="f-P" type="number" inputmode="decimal" step="1000"></div>
+                <div class="field"><label for="f-r">FD rate (% a year)</label><input id="f-r" type="number" inputmode="decimal" step="0.05"></div>
+                <div class="field"><label for="f-T">FD term (months)</label><input id="f-T" type="number" inputmode="numeric" step="1"></div>
+                <div class="field"><label for="f-e">Months already run</label><input id="f-e" type="number" inputmode="numeric" step="1"></div>
+                <div class="field"><label for="f-tax">Income tax band (%)</label><input id="f-tax" type="number" inputmode="decimal" step="5"></div>
+              </div>
+              <p class="hint">In the app these come from the FD account. Edit them here to test other cases.</p>
+            </div>
+          </details>
+
+          <details class="fold sub" id="as-fold">
+            <summary><span class="fold-title">Bank assumptions</span><span class="fold-sum">Rates, limits and penalty. Placeholders for the product team.</span></summary>
+            <div class="fold-body">
+              <div class="fields">
+                <div class="field"><label for="f-spread">Loan rate above FD rate (% points)</label><input id="f-spread" type="number" inputmode="decimal" step="0.25"></div>
+                <div class="field"><label for="f-ltv">Maximum loan (% of FD)</label><input id="f-ltv" type="number" inputmode="decimal" step="1"></div>
+                <div class="field"><label for="f-lafdFee">Loan against FD fee (% of loan)</label><input id="f-lafdFee" type="number" inputmode="decimal" step="0.1"></div>
+                <div class="field"><label for="f-pen">Early closure penalty (% points)</label><input id="f-pen" type="number" inputmode="decimal" step="0.25"></div>
+                <div class="field"><label for="f-gap">Lower card rate for the period held (% points)</label><input id="f-gap" type="number" inputmode="decimal" step="0.05"></div>
+                <div class="field"><label for="f-fall">FD rate fall since booking (% points)</label><input id="f-fall" type="number" inputmode="decimal" step="0.25"></div>
+                <div class="field"><label for="f-plRate">Personal loan rate (% a year)</label><input id="f-plRate" type="number" inputmode="decimal" step="0.25"></div>
+                <div class="field"><label for="f-plFee">Personal loan fee (% of loan)</label><input id="f-plFee" type="number" inputmode="decimal" step="0.1"></div>
+              </div>
+              <label class="check"><input id="f-partial" type="checkbox"><span>Bank allows closing only part of the FD</span></label>
+              <label class="check"><input id="f-biz" type="checkbox"><span>Loan is for business use, so its interest is tax-deductible</span></label>
+              <button class="link" id="reset" type="button">Reset to defaults</button>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <p class="fine">Estimates only. Simple interest on a 365-day year. Final charges depend on the product terms at the time you apply.</p>
+    </section>
+
+    <!-- ================= PROBLEM ================= -->
+    <section id="view-problem" class="prose" role="tabpanel" aria-labelledby="tab-problem" hidden>
+      <div class="prose-in">
+        <h2>The problem we are solving</h2>
+        <p class="lede">A customer needs cash for a few weeks or months. Their savings sit in a fixed deposit, so they open the early closure screen. Closing the FD looks like the only way to get the money.</p>
+        <p>Closing early costs twice. First, the bank pays the lower card rate for the period the FD actually ran, for example 6.25% instead of 6.5%. Then it deducts a penalty of up to 1%. On a ₹10 lakh FD closed after one year, that is a one-time loss of about ₹12,500. On top of that, the money stops earning and the locked-in rate is gone.</p>
+        <p>Two other routes exist, and the closure screen does not show them:</p>
+        <ul>
+          <li><strong>Loan against the FD.</strong> The bank lends up to 90% of the FD at 2% above the FD rate. Say ₹9 lakh at 8.5% against a 6.5% FD. The loan interest is ₹76,500 a year, but the FD still earns ₹58,500 on the same money. The net cost is the spread: ₹18,000 a year, or ₹1,500 a month. If the loan works like an overdraft, interest is charged only on what the customer actually draws.</li>
+          <li><strong>Personal loan.</strong> The FD is untouched, but the rate is much higher and a processing fee applies.</li>
+        </ul>
+        <p>Nobody can compare these costs in their head, in a hurry, and tax makes it harder. So most people take the path on the screen and pay the penalty.</p>
+      </div>
+
+      <div class="prose-in">
+        <h2>What we want to change</h2>
+        <p>Show the costs in rupees, side by side, on the closure screen. Show which is cheapest, and the number of days after which the answer flips. The customer decides in seconds, and can see the numbers are fair.</p>
+      </div>
+
+      <div class="prose-in">
+        <h2>Where it sits in the journey</h2>
+        <ol class="flow">
+          <li><span class="step-n">Step 1</span><h3>Customer taps Close FD</h3><p>The early closure screen opens with the usual payout and penalty.</p></li>
+          <li><span class="step-n">Step 2</span><h3>"Need cash for a short time?"</h3><p>This calculator opens. The customer sets the amount and the days. The tax band is assumed, and can be changed.</p></li>
+          <li><span class="step-n">Step 3</span><h3>Customer chooses</h3><p>Borrow against the FD, or carry on and close it.</p></li>
+        </ol>
+      </div>
+
+      <div class="prose-in">
+        <h2>What the customer sees</h2>
+        <p>The screen is built for someone who does not think in interest rates. It asks two questions and gives one answer.</p>
+        <ul>
+          <li><strong>Two inputs.</strong> How much, and for how long.</li>
+          <li><strong>One answer.</strong> The cheapest way, and how many rupees it saves.</li>
+          <li><strong>Three numbers.</strong> What each option costs, in plain words, with no rates or formulas.</li>
+          <li><strong>One sentence on timing.</strong> Up to how many days borrowing is cheaper.</li>
+          <li><strong>The working, one tap away.</strong> Costs line by line, the chart, the tax band and the bank assumptions sit under "See how this is worked out". That is also the view for the business review.</li>
+        </ul>
+      </div>
+
+      <div class="prose-in">
+        <h2>Why the bank gains too</h2>
+        <ul>
+          <li>The deposit stays on the books until maturity instead of leaving today.</li>
+          <li>The bank earns interest on a loan that is backed by the FD itself, so credit risk is low.</li>
+          <li>The customer finishes the journey with us, not with a personal loan app.</li>
+          <li>A customer who is shown the honest answer, even when it is "close the FD", is more likely to trust the bank next time.</li>
+        </ul>
+      </div>
+
+      <div class="prose-in">
+        <h2>What the customer should know beyond the rupees</h2>
+        <ul>
+          <li><strong>Tax.</strong> FD interest is taxed at the slab rate. Interest on a personal-use loan gets no tax break. Closing early gives up taxable interest, so part of that loss comes back as lower tax. This is why the calculator asks for the slab, and why the loan wins for fewer days at a higher slab. Loan interest may be deductible when the money is used for business. A switch under Bank assumptions covers that.</li>
+          <li><strong>The FD is pledged.</strong> It cannot be touched until the loan is repaid.</li>
+          <li><strong>Repay before maturity.</strong> If the loan is still open when the FD matures, the bank recovers what is owed from the FD. That works like an early closure. The calculator limits the days to the FD's remaining term.</li>
+          <li><strong>Discipline.</strong> A loan forces repayment, so the savings are rebuilt. A broken FD is often never rebuilt. The calculator does not put a rupee value on this. For some customers it decides the choice.</li>
+        </ul>
+      </div>
+
+      <div class="prose-in">
+        <h2>How the cost is worked out</h2>
+        <p>Every figure is the customer's cost in rupees over the days they need the money, after tax. Interest is simple, on a 365-day year.</p>
+        <div class="formula" tabindex="0">Loan against FD   = Amount × (FD rate + spread) × Days ÷ 365  +  fee
+Close FD early    = Lower-rate loss + Lost interest + Re-booking loss − Tax saved
+   Lower-rate loss  = Amount closed × (card-rate gap + penalty) × Months run ÷ 12
+   Lost interest    = Amount × FD rate × Days ÷ 365
+   Re-booking loss  = Amount re-invested × Rate fall × Years left
+   Tax saved        = Tax slab × (the three items above)
+Personal loan     = Amount × Loan rate × Days ÷ 365  +  fee
+Cost per year     = Cost ÷ (Amount × Days ÷ 365)</div>
+        <p>Loan interest and fees get no tax relief, unless the loan is for business use. Closing the FD early is compared over the same period, up to the FD's original maturity.</p>
+        <p>While a loan against the FD runs, the FD keeps earning on the same money. That interest covers most of the loan interest, so the real extra is the spread.</p>
+        <p>A loan against the FD costs more per day than closing early. Closing early has a one-time loss. So the loan wins for short needs, and closing early wins once the days pile up. A higher tax slab brings that crossover earlier. The chart on the calculator tab shows where it falls.</p>
+      </div>
+
+      <div class="prose-in">
+        <h2>Worked example</h2>
+        <p class="hint" id="example-intro"></p>
+        <div class="table-wrap"><table id="example-table"></table></div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<script>
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory();
+  else root.FDModel = factory();
+})(this, function () {
+  "use strict";
+
+  // Illustrative defaults. Reference case: Rs 10 lakh FD, 6.5%, 3 years, closed after 1 year,
+  // Rs 9 lakh needed (the 90% loan limit). Replace with the product team's real parameters.
+  var DEFAULTS = {
+    P: 1000000,   // FD amount (Rs)
+    r: 6.5,       // FD rate (% a year)
+    T: 36,        // FD tenure (months)
+    e: 12,        // months already run
+    X: 900000,    // cash needed (Rs)
+    D: 60,        // days the cash is needed
+    spread: 2,    // loan-against-FD rate above FD rate (% points)
+    ltv: 90,      // max loan as % of FD amount
+    lafdFee: 0,   // loan-against-FD fee (% of loan)
+    pen: 1,       // premature closure penalty (% points)
+    gap: 0.25,    // card rate for the period held is lower than the booked rate by this much (% points)
+    fall: 0,      // fall in FD rates since booking (% points), used when re-booking
+    partial: false, // bank allows breaking only part of the FD
+    tax: 30,      // customer's income tax slab (%)
+    biz: false,   // loan is for business use, so loan interest is tax-deductible
+    plRate: 14,   // personal loan rate (% a year)
+    plFee: 1.5    // personal loan fee (% of loan)
+  };
+
+  var YEAR = 365;
+
+  function daysLeft(T, e) {
+    return Math.max(0, Math.round((T - e) * YEAR / 12));
+  }
+
+  // All costs are in rupees, simple interest, over the days the cash is needed.
+  // "pre" is before tax, "taxSaved" is tax relief, "total" is what the customer really bears.
+  function compute(i) {
+    var Dy = i.D / YEAR;
+    var Ry = Math.max(0, (i.T - i.e) / 12);
+    var tr = i.tax / 100;
+    var baseInterest = i.P * i.r / 100 * i.T / 12;
+    var maxLoan = i.P * i.ltv / 100;
+
+    // 1. Loan against FD: FD stays pledged and keeps earning; customer pays interest on the amount drawn.
+    var loanRate = i.r + i.spread;
+    var loanInterest = i.X * loanRate / 100 * Dy;
+    var loanFee = i.X * i.lafdFee / 100;
+    var loanPre = loanInterest + loanFee;
+    var loanTax = i.biz ? loanPre * tr : 0;
+    var loan = {
+      available: i.X <= maxLoan + 0.5,
+      maxLoan: maxLoan,
+      rate: loanRate,
+      interest: loanInterest,
+      fee: loanFee,
+      pre: loanPre,
+      taxSaved: loanTax,
+      total: loanPre - loanTax,
+      fdInterest: baseInterest
+    };
+
+    // 2. Close the FD early (whole FD, or only the part needed if the bank allows).
+    //    Interest earned so far is re-paid at a lower rate: held-period card rate gap + penalty.
+    var broken = i.partial ? i.X : i.P;
+    var cut = Math.min(i.pen + i.gap, i.r);
+    var rNew = Math.max(0, i.r - i.fall);
+    var rateGap = i.r - rNew;
+    var penalty = broken * cut / 100 * i.e / 12;
+    var idle = i.X * i.r / 100 * Dy;
+    var rebook = ((broken - i.X) * Ry + i.X * Math.max(0, Ry - Dy)) * rateGap / 100;
+    var brkPre = penalty + idle + rebook;
+    var brkTax = brkPre * tr; // lost FD interest was taxable income, so less tax is paid
+    var brk = {
+      broken: broken,
+      cut: cut,
+      penalty: penalty,
+      idle: idle,
+      rebook: rebook,
+      pre: brkPre,
+      taxSaved: brkTax,
+      total: brkPre - brkTax,
+      fdInterest: baseInterest - brkPre
+    };
+
+    // 3. Personal loan: FD untouched; customer pays unsecured loan interest and fee.
+    var plInterest = i.X * i.plRate / 100 * Dy;
+    var plFee = i.X * i.plFee / 100;
+    var plPre = plInterest + plFee;
+    var plTax = i.biz ? plPre * tr : 0;
+    var pl = {
+      rate: i.plRate,
+      interest: plInterest,
+      fee: plFee,
+      pre: plPre,
+      taxSaved: plTax,
+      total: plPre - plTax,
+      fdInterest: baseInterest
+    };
+
+    var money = i.X * Dy;
+    function eff(t) { return money > 0 ? t / money * 100 : 0; }
+    loan.eff = eff(loan.total);
+    brk.eff = eff(brk.total);
+    pl.eff = eff(pl.total);
+
+    return {
+      daysLeft: daysLeft(i.T, i.e),
+      baseInterest: baseInterest,
+      loan: loan,
+      brk: brk,
+      pl: pl
+    };
+  }
+
+  // Options from cheapest to dearest. The loan against FD is left out when the amount is above the limit.
+  function ranking(res) {
+    var c = [];
+    if (res.loan.available) c.push({ k: "loan", t: res.loan.total });
+    c.push({ k: "brk", t: res.brk.total });
+    c.push({ k: "pl", t: res.pl.total });
+    c.sort(function (a, b) { return a.t - b.t; });
+    return c;
+  }
+
+  function bestKey(res) { return ranking(res)[0].k; }
+
+  // Costs for every day from 0 to maxDays.
+  function sweep(i, maxDays) {
+    var out = [];
+    for (var d = 0; d <= maxDays; d++) {
+      var s = compute(Object.assign({}, i, { D: d }));
+      out.push({ d: d, loan: s.loan.total, brk: s.brk.total, pl: s.pl.total });
+    }
+    return out;
+  }
+
+  // First day (from day 1) on which option a costs more than option b. null if never.
+  function firstWorse(points, a, b) {
+    for (var k = 1; k < points.length; k++) {
+      if (points[k][a] > points[k][b] + 0.005) return points[k].d;
+    }
+    return null;
+  }
+
+  return {
+    DEFAULTS: DEFAULTS,
+    compute: compute,
+    ranking: ranking,
+    bestKey: bestKey,
+    sweep: sweep,
+    firstWorse: firstWorse,
+    daysLeft: daysLeft
+  };
+});
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var M = window.FDModel;
+  var DEF = M.DEFAULTS;
+  var S = copy(DEF);
+  var last = null;
+
+  function copy(o) { var c = {}; for (var k in o) c[k] = o[k]; return c; }
+  function $(id) { return document.getElementById(id); }
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+  var nf = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+  function inr(n) { var v = Math.round(n); return (v < 0 ? "−" : "") + "₹" + nf.format(Math.abs(v)); }
+  function pc(n) { return (Math.round(n * 100) / 100).toFixed(2) + "%"; }
+  function dayText(n) { return n + (n === 1 ? " day" : " days"); }
+  function monthText(n) { return n + (n === 1 ? " month" : " months"); }
+  function shortInr(n) {
+    if (n >= 100000) { var l = n / 100000; return "₹" + (l % 1 === 0 ? l : l.toFixed(1)) + "L"; }
+    if (n >= 1000) { var k = n / 1000; return "₹" + (k % 1 === 0 ? k : k.toFixed(1)) + "k"; }
+    return "₹" + Math.round(n);
+  }
+
+  /* ---------- state ---------- */
+  var FIELDS = {
+    P: { id: "f-P", min: 10000, max: 1e9 },
+    r: { id: "f-r", min: 0.1, max: 20 },
+    T: { id: "f-T", min: 1, max: 120 },
+    e: { id: "f-e", min: 0, max: 119 },
+    tax: { id: "f-tax", min: 0, max: 40 },
+    spread: { id: "f-spread", min: 0, max: 10 },
+    ltv: { id: "f-ltv", min: 10, max: 100 },
+    lafdFee: { id: "f-lafdFee", min: 0, max: 5 },
+    pen: { id: "f-pen", min: 0, max: 5 },
+    gap: { id: "f-gap", min: 0, max: 3 },
+    fall: { id: "f-fall", min: -3, max: 5 },
+    plRate: { id: "f-plRate", min: 1, max: 60 },
+    plFee: { id: "f-plFee", min: 0, max: 10 }
+  };
+  var ORDER = ["P", "r", "T", "e", "tax", "spread", "ltv", "lafdFee", "pen", "gap", "fall", "plRate", "plFee"];
+
+  function amountStep(P) { return Math.max(1000, Math.round(P / 100 / 1000) * 1000); }
+
+  function readFields() {
+    ORDER.forEach(function (k) {
+      var v = parseFloat($(FIELDS[k].id).value);
+      if (isFinite(v)) S[k] = clamp(v, FIELDS[k].min, FIELDS[k].max);
+    });
+    S.T = Math.round(S.T);
+    S.e = clamp(Math.round(S.e), 0, S.T - 1);
+    S.partial = $("f-partial").checked;
+    S.biz = $("f-biz").checked;
+    fixDerived();
+  }
+
+  function fixDerived() {
+    var left = M.daysLeft(S.T, S.e);
+    S.D = clamp(Math.round(S.D), 1, Math.max(1, left));
+    S.X = clamp(S.X, amountStep(S.P), S.P);
+  }
+
+  function syncFields() {
+    ORDER.forEach(function (k) { $(FIELDS[k].id).value = String(Math.round(S[k] * 100) / 100); });
+    $("f-e").max = String(S.T - 1);
+    $("f-partial").checked = !!S.partial;
+    $("f-biz").checked = !!S.biz;
+  }
+
+  /* ---------- chips ---------- */
+  function setChips(box, items, isActive) {
+    var key = items.map(function (i) { return i.label + ":" + i.v; }).join("|");
+    if (box.getAttribute("data-key") !== key) {
+      box.setAttribute("data-key", key);
+      box.innerHTML = items.map(function (i) {
+        return '<button type="button" class="chip" data-v="' + i.v + '">' + i.label + "</button>";
+      }).join("");
+    }
+    Array.prototype.forEach.call(box.children, function (b) {
+      b.setAttribute("aria-pressed", isActive(Number(b.getAttribute("data-v"))) ? "true" : "false");
+    });
+  }
+
+  /* ---------- needs ---------- */
+  var DAY_LABELS = { 15: "15 days", 30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months", 365: "1 year" };
+  function approx(n) {
+    if (n < 60) return dayText(n);
+    var m = Math.round(n / 30.4);
+    if (m < 24) return "about " + m + " months";
+    return "about " + (Math.round(n / 36.5) / 10) + " years";
+  }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function renderNeeds(res) {
+    var step = amountStep(S.P);
+    var a = $("amount");
+    a.min = step; a.max = S.P; a.step = step; a.value = S.X;
+    $("amount-out").textContent = inr(S.X);
+    var maxLoanStep = Math.max(step, Math.floor(res.loan.maxLoan / step) * step);
+    var top = Math.min(maxLoanStep, S.P);
+    var items = [];
+    [25, 50, 75].forEach(function (p) {
+      var v = Math.max(step, Math.round(S.P * p / 100 / step) * step);
+      if (v < top) items.push({ label: inr(v), v: v });
+    });
+    items.push({ label: inr(top) + " (most you can borrow)", v: top });
+    setChips($("amount-chips"), items, function (v) { return Math.abs(v - S.X) < 1; });
+    $("amount-hint").textContent = res.loan.available
+      ? "You can borrow up to " + inr(res.loan.maxLoan) + " against this FD."
+      : "This is more than you can borrow against this FD (" + inr(res.loan.maxLoan) + ").";
+
+    var left = res.daysLeft;
+    var d = $("days");
+    d.min = 1; d.max = left; d.value = S.D;
+    $("days-out").textContent = dayText(S.D);
+    var ditems = [15, 30, 60, 90, 180, 365].filter(function (n) { return n < left; }).map(function (n) { return { label: DAY_LABELS[n], v: n }; });
+    ditems.push({ label: "Till my FD ends", v: left });
+    setChips($("days-chips"), ditems, function (v) { return v === S.D; });
+    $("days-hint").textContent = (S.D >= 60 ? cap(approx(S.D)) + ". " : "") + "Your FD ends in " + dayText(left) + ". Repay before then.";
+
+    setChips($("tax-chips"), [0, 5, 10, 20, 30].map(function (n) { return { label: n === 0 ? "Nil" : n + "%", v: n }; }), function (v) { return v === S.tax; });
+
+    $("fd-sum").textContent = inr(S.P) + " at " + pc(S.r) + " · " + monthText(S.T) + " · " + monthText(S.e) + " run";
+  }
+
+  /* ---------- verdict ---------- */
+  function nameOf(k) {
+    if (k === "loan") return "borrowing against your FD";
+    if (k === "brk") return S.partial ? "taking part of your FD out" : "closing your FD";
+    return "a personal loan";
+  }
+  function titleOf(k) {
+    if (k === "loan") return "Borrow against your FD";
+    if (k === "brk") return S.partial ? "Take part of your FD out" : "Close your FD";
+    return "Take a personal loan";
+  }
+
+  function renderVerdict(res, pts) {
+    var v = $("verdict");
+    var rank = M.ranking(res);
+    var best = rank[0], second = rank[1];
+    var diff = second.t - best.t;
+    var close = diff < Math.max(0.05 * best.t, 200) && best.k !== "pl" && second.k !== "pl";
+    var tone = close ? "close" : best.k;
+    var eyebrow = (close ? "Getting " : "Cheapest way to get ") + inr(S.X) + " for " + dayText(S.D);
+    var head, saveNum, saveLabel, sub;
+
+    if (close) {
+      head = "About the same cost either way";
+      saveNum = inr(diff);
+      saveLabel = "apart";
+      sub = "Borrowing keeps your FD earning, and repaying rebuilds your savings. Closing your FD leaves nothing to repay.";
+    } else if (best.k === "loan") {
+      head = "Keep your FD. Borrow against it.";
+      saveNum = inr(res.brk.total - res.loan.total);
+      saveLabel = "less than closing your FD";
+      sub = "Your FD keeps earning while you borrow.";
+    } else if (best.k === "brk") {
+      head = S.partial ? "Taking part of your FD out costs least" : "Closing your FD costs least";
+      saveNum = inr(diff);
+      saveLabel = "less than " + nameOf(second.k);
+      if (res.loan.available) {
+        var fw = M.firstWorse(pts, "loan", "brk");
+        sub = fw && fw > 1
+          ? "Need the money for less time? Borrowing against your FD costs less for up to " + dayText(fw - 1) + "."
+          : "For this FD, borrowing costs more than closing at every length.";
+      } else {
+        sub = "You cannot borrow " + inr(S.X) + " against this FD. The most you can borrow is " + inr(res.loan.maxLoan) + ".";
+      }
+    } else {
+      head = "A personal loan costs least here";
+      saveNum = inr(diff);
+      saveLabel = "less than " + nameOf(second.k);
+      sub = "The personal loan rate here is below the loan against FD rate. Check the bank assumptions.";
+    }
+    v.setAttribute("data-tone", tone);
+    v.innerHTML = '<p class="eyebrow">' + eyebrow + "</p><h2>" + head + '</h2><p class="save"><span class="save-num">' + saveNum + "</span><span>" + saveLabel + '</span></p><p class="sub">' + sub + "</p>";
+  }
+
+  /* ---------- simple option rows ---------- */
+  function renderSimple(res, pts) {
+    var best = M.bestKey(res);
+    var totals = [res.pl.total, res.brk.total];
+    if (res.loan.available) totals.push(res.loan.total);
+    var max = Math.max.apply(null, totals) || 1;
+
+    function row(key, o, why) {
+      var isBest = best === key;
+      var w = Math.max(2, Math.round(Math.max(o.total, 0) / max * 100));
+      return '<article class="so" data-opt="' + key + '" data-best="' + (isBest ? "true" : "false") + '">' +
+        '<div class="so-top"><span class="sw" aria-hidden="true"></span><h3>' + titleOf(key) + "</h3>" + (isBest ? '<span class="tag">Cheapest</span>' : "") +
+        '<span class="so-cost">' + inr(o.total) + "<small>total cost</small></span></div>" +
+        '<div class="bar" aria-hidden="true"><span style="width:' + w + '%"></span></div>' +
+        '<p class="so-why">' + why + "</p></article>";
+    }
+
+    var html = "";
+    if (res.loan.available) {
+      html += row("loan", res.loan, "Your FD stays in place and keeps earning. You pay interest on the loan.");
+    } else {
+      html += '<article class="so" data-opt="loan" data-na="true" data-best="false"><div class="so-top"><span class="sw" aria-hidden="true"></span><h3>' + titleOf("loan") + '</h3><span class="tag na">Not available</span></div>' +
+        '<p class="so-why">You can borrow up to ' + inr(res.loan.maxLoan) + " against this FD. You asked for " + inr(S.X) + ".</p>" +
+        '<div><button type="button" class="chip" data-set-max="' + Math.floor(res.loan.maxLoan) + '">Set amount to ' + inr(res.loan.maxLoan) + "</button></div></article>";
+    }
+    html += row("brk", res.brk, "You lose some interest, pay a penalty, and the money stops earning.");
+    html += row("pl", res.pl, "Your FD stays in place, but a personal loan has higher interest and a fee.");
+    $("simple-options").innerHTML = html;
+
+    var flip;
+    if (res.loan.available) {
+      var fw = M.firstWorse(pts, "loan", "brk");
+      if (fw === null) flip = "Borrowing against your FD costs less than closing it, however long you need the money.";
+      else if (fw === 1) flip = "Closing your FD costs less than borrowing, even for one day.";
+      else flip = "Borrowing is cheaper if you need the money for up to " + dayText(fw - 1) + ". After that, closing your FD costs less.";
+    } else {
+      flip = "Borrowing against your FD is not possible for this amount.";
+    }
+    $("flip").textContent = flip;
+    $("tax-text").textContent = S.tax > 0 ? "Costs include income tax, at a " + S.tax + "% band." : "Costs assume you pay no income tax.";
+  }
+
+  /* ---------- option cards ---------- */
+  function lineList(items) {
+    return '<ul class="lines">' + items.map(function (it) {
+      return '<li><span class="l-main">' + it.label + '<span class="l-sub">' + it.sub + '</span></span><span class="l-val">' + it.val + "</span></li>";
+    }).join("") + "</ul>";
+  }
+
+  function card(key, name, o, items, foot, isBest, max) {
+    var w = Math.max(2, Math.round(Math.max(o.total, 0) / max * 100));
+    return '<article class="opt" data-opt="' + key + '" data-best="' + (isBest ? "true" : "false") + '">' +
+      '<div class="opt-head"><div class="opt-name"><span class="sw" aria-hidden="true"></span><h3>' + name + "</h3>" + (isBest ? '<span class="tag">Cheapest</span>' : "") + "</div>" +
+      '<div class="opt-cost"><span class="cost">' + inr(o.total) + '</span><span class="eff">' + pc(o.eff) + " a year on the money you use" + (S.tax > 0 ? ", after tax" : "") + "</span></div></div>" +
+      '<div class="bar" aria-hidden="true"><span style="width:' + w + '%"></span></div>' +
+      lineList(items) + foot + "</article>";
+  }
+
+  function renderOptions(res) {
+    var best = M.bestKey(res);
+    var totals = [res.pl.total, res.brk.total];
+    if (res.loan.available) totals.push(res.loan.total);
+    var max = Math.max.apply(null, totals) || 1;
+    var html = "";
+
+    if (res.loan.available) {
+      var items = [{ label: "Loan interest", sub: pc(res.loan.rate) + " on " + inr(S.X) + " for " + dayText(S.D), val: inr(res.loan.interest) }];
+      if (res.loan.fee > 0.5) items.push({ label: "Processing fee", sub: pc(S.lafdFee) + " of the loan", val: inr(res.loan.fee) });
+      if (res.loan.taxSaved > 0.5) items.push({ label: "Tax saved on loan interest", sub: "Business use, " + S.tax + "% slab", val: inr(-res.loan.taxSaved) });
+      var fdOnX = S.X * S.r / 100 * S.D / 365;
+      var spreadCost = S.X * S.spread / 100 * S.D / 365;
+      var perMonth = S.X * S.spread / 100 / 12;
+      html += card("loan", "Loan against your FD", res.loan, items,
+        '<p class="foot">Your FD keeps earning ' + inr(fdOnX) + " on this money while the loan runs. That interest covers most of the loan interest. The real extra is the " + pc(S.spread) + " spread: about " + inr(perMonth) + " a month, " + inr(spreadCost) + " for " + dayText(S.D) + ".</p>" +
+        '<p class="fdline">FD interest by maturity <strong>' + inr(res.baseInterest) + "</strong>, untouched.</p>" +
+        '<p class="foot">The FD is pledged until you repay. Repay before it matures.</p>',
+        best === "loan", max);
+    } else {
+      html += '<article class="opt" data-opt="loan" data-na="true" data-best="false">' +
+        '<div class="opt-head"><div class="opt-name"><span class="sw" aria-hidden="true"></span><h3>Loan against your FD</h3><span class="tag na">Not available</span></div></div>' +
+        '<p class="foot">This FD supports a loan of up to ' + inr(res.loan.maxLoan) + ". You asked for " + inr(S.X) + ".</p>" +
+        '<div><button type="button" class="chip" data-set-max="' + Math.floor(res.loan.maxLoan) + '">Set amount to ' + inr(res.loan.maxLoan) + "</button></div></article>";
+    }
+
+    var b = res.brk;
+    var bi = [];
+    if (b.penalty > 0.5) {
+      var parts = [];
+      if (S.gap > 0) parts.push(pc(S.gap) + " lower card rate");
+      if (S.pen > 0) parts.push(pc(S.pen) + " penalty");
+      bi.push({ label: "Lower rate on interest earned", sub: parts.join(" + ") + " on " + inr(b.broken) + " for " + monthText(S.e), val: inr(b.penalty) });
+    }
+    bi.push({ label: "Interest lost on the money you use", sub: pc(S.r) + " on " + inr(S.X) + " for " + dayText(S.D), val: inr(b.idle) });
+    if (Math.abs(b.rebook) > 0.5) bi.push({ label: b.rebook > 0 ? "Lower rate when you re-book" : "Higher rate when you re-book", sub: pc(Math.abs(S.fall)) + (S.fall > 0 ? " lower" : " higher") + " for the rest of the FD term", val: inr(b.rebook) });
+    if (Math.abs(b.taxSaved) > 0.5) bi.push({ label: "Tax you no longer pay on that interest", sub: S.tax + "% slab", val: inr(-b.taxSaved) });
+    html += card("brk", S.partial ? "Withdraw part of the FD" : "Close the FD early", b, bi,
+      '<p class="fdline">FD interest by maturity falls from <strong>' + inr(res.baseInterest) + "</strong> to <strong>" + inr(b.fdInterest) + "</strong>, before tax.</p>",
+      best === "brk", max);
+
+    var p = res.pl;
+    var pi = [{ label: "Loan interest", sub: pc(p.rate) + " on " + inr(S.X) + " for " + dayText(S.D), val: inr(p.interest) }];
+    if (p.fee > 0.5) pi.push({ label: "Processing fee", sub: pc(S.plFee) + " of the loan", val: inr(p.fee) });
+    if (p.taxSaved > 0.5) pi.push({ label: "Tax saved on loan interest", sub: "Business use, " + S.tax + "% slab", val: inr(-p.taxSaved) });
+    html += card("pl", "Personal loan", p, pi,
+      '<p class="foot">Your FD is untouched and earns ' + inr(res.baseInterest) + ". The loan is extra cost on top.</p>",
+      best === "pl", max);
+
+    $("options").innerHTML = html;
+  }
+
+  /* ---------- chart ---------- */
+  function niceTicks(max, count) {
+    var raw = max / count;
+    var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var n = raw / mag;
+    var step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+    var out = [];
+    for (var t = 0; t < max + step * 0.999; t += step) out.push(Math.round(t * 100) / 100);
+    return out;
+  }
+  function xTicks(left) {
+    var steps = [5, 10, 15, 30, 45, 60, 90, 120, 180, 365, 730];
+    var s = steps[steps.length - 1];
+    for (var i = 0; i < steps.length; i++) { if (left / steps[i] <= 7) { s = steps[i]; break; } }
+    var out = [];
+    for (var d = 0; d <= left; d += s) out.push(d);
+    return out;
+  }
+
+  function renderChart(res, pts) {
+    var box = $("chart");
+    var left = res.daysLeft;
+    var w = Math.max(280, Math.floor(box.clientWidth || 320));
+    var h = w < 520 ? 270 : 310;
+    var m = { l: 52, r: 14, t: 40, b: 44 };
+    var iw = w - m.l - m.r, ih = h - m.t - m.b;
+    var keys = [];
+    if (res.loan.available) keys.push("loan");
+    keys.push("brk", "pl");
+
+    var ymax = 0;
+    pts.forEach(function (p) { keys.forEach(function (k) { if (p[k] > ymax) ymax = p[k]; }); });
+    var ticks = niceTicks(ymax || 1, 4);
+    var top = ticks[ticks.length - 1] || 1;
+    function X(d) { return m.l + (left ? d / left : 0) * iw; }
+    function Y(v) { return m.t + ih - (v / top) * ih; }
+
+    var cur = pts[Math.min(S.D, pts.length - 1)];
+    var names = { loan: "loan against FD", brk: "closing early", pl: "personal loan" };
+    var aria = "Line chart of total cost against days from 0 to " + left + ". At " + S.D + " days: " +
+      keys.map(function (k) { return names[k] + " " + inr(cur[k]); }).join(", ") + ".";
+
+    var s = '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="' + aria + '">';
+    ticks.forEach(function (t) {
+      s += '<line class="grid" x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '"/>';
+      s += '<text class="ax" x="' + (m.l - 8) + '" y="' + (Y(t) + 4).toFixed(1) + '" text-anchor="end">' + shortInr(t) + "</text>";
+    });
+    s += '<line class="axis" x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + (m.t + ih) + '" y2="' + (m.t + ih) + '"/>';
+    xTicks(left).forEach(function (d) {
+      s += '<text class="ax" x="' + X(d).toFixed(1) + '" y="' + (m.t + ih + 16) + '" text-anchor="middle">' + d + "</text>";
+    });
+    s += '<text class="ax" x="' + (m.l + iw / 2) + '" y="' + (h - 8) + '" text-anchor="middle">Days you need the money</text>';
+
+    // break-even between loan and closing early
+    if (res.loan.available) {
+      var fw = M.firstWorse(pts, "loan", "brk");
+      if (fw && fw > 1) {
+        var bx = X(fw - 0.5);
+        s += '<line class="ref" x1="' + bx.toFixed(1) + '" x2="' + bx.toFixed(1) + '" y1="' + (m.t - 6) + '" y2="' + (m.t + ih) + '"/>';
+        s += '<text class="lbl" x="' + clamp(bx, m.l + 62, w - m.r - 62).toFixed(1) + '" y="' + (m.t - 24) + '" text-anchor="middle">Break-even: day ' + (fw - 1) + "</text>";
+      }
+    }
+    // your choice
+    var ux = X(S.D);
+    s += '<line class="ref-you" x1="' + ux.toFixed(1) + '" x2="' + ux.toFixed(1) + '" y1="' + (m.t - 6) + '" y2="' + (m.t + ih) + '"/>';
+    s += '<text class="lbl" x="' + clamp(ux, m.l + 40, w - m.r - 40).toFixed(1) + '" y="' + (m.t - 10) + '" text-anchor="middle">You: ' + dayText(S.D) + "</text>";
+
+    var stride = Math.max(1, Math.ceil(left / 360));
+    keys.forEach(function (k) {
+      var dpath = "";
+      for (var i = 0; i < pts.length; i += stride) dpath += (dpath ? "L" : "M") + X(pts[i].d).toFixed(1) + " " + Y(pts[i][k]).toFixed(1);
+      var lastP = pts[pts.length - 1];
+      if ((pts.length - 1) % stride !== 0) dpath += "L" + X(lastP.d).toFixed(1) + " " + Y(lastP[k]).toFixed(1);
+      s += '<path class="ln s-' + k + '" d="' + dpath + '"/>';
+    });
+    keys.forEach(function (k) {
+      s += '<circle class="mk mk-' + k + '" cx="' + ux.toFixed(1) + '" cy="' + Y(cur[k]).toFixed(1) + '" r="5"/>';
+    });
+    s += "</svg>";
+    box.innerHTML = s;
+  }
+
+  function renderChartNote(res, pts) {
+    var note;
+    if (!res.loan.available) {
+      note = "A loan against the FD is not available at this amount, so it is left off the chart.";
+    } else {
+      var fw = M.firstWorse(pts, "loan", "brk");
+      var fp = M.firstWorse(pts, "loan", "pl");
+      if (fw === null) note = "A loan against the FD costs less than closing early for every length of need, up to maturity (" + dayText(res.daysLeft) + ").";
+      else if (fw === 1) note = "Closing early costs less than a loan against the FD, even for a single day.";
+      else note = "A loan against the FD costs less than closing early for needs up to " + dayText(fw - 1) + ". After that, closing early costs less.";
+      if (fp === null) note += " It stays below a personal loan at every length.";
+      else note += " A personal loan costs less from day " + fp + ".";
+      if (S.tax > 0) note += " Costs are after " + S.tax + "% tax.";
+    }
+    $("chart-note").textContent = note;
+    var lg = "";
+    if (res.loan.available) lg += '<span><i class="sw" aria-hidden="true"></i>Loan against FD</span>';
+    lg += '<span><i class="sw brk" aria-hidden="true"></i>' + (S.partial ? "Withdraw part of FD" : "Close FD early") + '</span><span><i class="sw pl" aria-hidden="true"></i>Personal loan</span>';
+    $("legend").innerHTML = lg;
+  }
+
+  /* ---------- actions ---------- */
+  function renderActions(res) {
+    var best = M.bestKey(res);
+    var bl = $("btn-loan"), bb = $("btn-brk");
+    bl.textContent = "Borrow " + inr(S.X) + " against my FD";
+    bb.textContent = S.partial ? "Continue to withdraw part of my FD" : "Continue to close my FD";
+    bl.disabled = !res.loan.available;
+    bl.className = "btn" + (best !== "brk" && res.loan.available ? " primary" : "");
+    bb.className = "btn" + (best === "brk" || !res.loan.available ? " primary" : "");
+  }
+
+  /* ---------- main render ---------- */
+  function render() {
+    var res = M.compute(S);
+    var pts = M.sweep(S, res.daysLeft);
+    last = { res: res, pts: pts };
+    renderNeeds(res);
+    renderVerdict(res, pts);
+    renderSimple(res, pts);
+    renderOptions(res);
+    renderChart(res, pts);
+    renderChartNote(res, pts);
+    renderActions(res);
+  }
+
+  /* ---------- events ---------- */
+  $("amount").addEventListener("input", function () { S.X = Number(this.value); fixDerived(); render(); });
+  $("days").addEventListener("input", function () { S.D = Number(this.value); fixDerived(); render(); });
+  $("amount-chips").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-v]"); if (!b) return;
+    S.X = Number(b.getAttribute("data-v")); fixDerived(); render();
+  });
+  $("days-chips").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-v]"); if (!b) return;
+    S.D = Number(b.getAttribute("data-v")); fixDerived(); render();
+  });
+  $("tax-chips").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-v]"); if (!b) return;
+    S.tax = Number(b.getAttribute("data-v")); syncFields(); render();
+  });
+  $("options").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-set-max]"); if (!b) return;
+    S.X = Number(b.getAttribute("data-set-max")); fixDerived(); render();
+  });
+  $("simple-options").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-set-max]"); if (!b) return;
+    S.X = Number(b.getAttribute("data-set-max")); fixDerived(); render();
+  });
+  $("tax-change").addEventListener("click", function () {
+    $("work-fold").open = true;
+    var el = $("tax-chips");
+    try { if (el.scrollIntoView) el.scrollIntoView({ block: "center" }); } catch (e) { /* ignore */ }
+  });
+  ORDER.forEach(function (k) {
+    var f = $(FIELDS[k].id);
+    f.addEventListener("input", function () { readFields(); render(); });
+    f.addEventListener("change", function () { readFields(); syncFields(); render(); });
+  });
+  $("f-partial").addEventListener("change", function () { readFields(); render(); });
+  $("f-biz").addEventListener("change", function () { readFields(); render(); });
+  $("reset").addEventListener("click", function () { S = copy(DEF); syncFields(); render(); $("cta-note").textContent = ""; });
+  $("btn-loan").addEventListener("click", function () {
+    $("cta-note").textContent = "Prototype only. In the app, this would start the loan-against-FD journey for " + inr(S.X) + ".";
+  });
+  $("btn-brk").addEventListener("click", function () {
+    $("cta-note").textContent = "Prototype only. In the app, this would continue to the closure confirmation.";
+  });
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { if (last) renderChart(last.res, last.pts); }).observe($("chart"));
+  }
+
+  /* ---------- tabs ---------- */
+  var TABS = ["calculator", "problem"];
+  function showTab(name, focus) {
+    TABS.forEach(function (t) {
+      var on = t === name;
+      $("view-" + t).hidden = !on;
+      var btn = $("tab-" + t);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+      if (on && focus) btn.focus();
+    });
+    try { history.replaceState(null, "", "#" + name); } catch (e) { /* not available in the viewer */ }
+  }
+  TABS.forEach(function (t) {
+    $("tab-" + t).addEventListener("click", function () { showTab(t, false); });
+    $("tab-" + t).addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") {
+        var i = TABS.indexOf(t);
+        var n = TABS[(i + (ev.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+        showTab(n, true);
+      }
+    });
+  });
+
+  /* ---------- problem tab tables (built from the defaults so they never drift) ---------- */
+  function buildProblem() {
+    var d = copy(DEF);
+    var r = M.compute(d);
+    $("example-intro").textContent = inr(d.P) + " FD at " + pc(d.r) + " for " + monthText(d.T) + ", closed after " + monthText(d.e) + ". Needs " + inr(d.X) + " for " + dayText(d.D) + ". Tax slab " + d.tax + "%. Costs are after tax.";
+    function row(name, how, o) {
+      return "<tr><td><strong>" + name + "</strong></td><td>" + how + '</td><td class="num">' + inr(o.total) + '</td><td class="num">' + pc(o.eff) + "</td></tr>";
+    }
+    var loanHow = "Interest " + inr(r.loan.interest) + (r.loan.fee > 0.5 ? " + fee " + inr(r.loan.fee) : "") + ". No tax relief. FD interest of " + inr(r.baseInterest) + " stays intact.";
+    var brkHow = "Lower-rate loss " + inr(r.brk.penalty) + " + lost interest " + inr(r.brk.idle) + (Math.abs(r.brk.rebook) > 0.5 ? " + re-booking loss " + inr(r.brk.rebook) : "") + (r.brk.taxSaved > 0.5 ? " − tax saved " + inr(r.brk.taxSaved) : "") + ".";
+    var plHow = "Interest " + inr(r.pl.interest) + (r.pl.fee > 0.5 ? " + fee " + inr(r.pl.fee) : "") + ". No tax relief.";
+    $("example-table").innerHTML = '<thead><tr><th>Option</th><th>How it adds up</th><th class="num">Cost</th><th class="num">Per year</th></tr></thead><tbody>' +
+      row("Loan against FD", loanHow, r.loan) + row("Close FD early", brkHow, r.brk) + row("Personal loan", plHow, r.pl) + "</tbody>";
+  }
+
+  /* ---------- start ---------- */
+  syncFields();
+  fixDerived();
+  buildProblem();
+  render();
+  showTab(location.hash === "#problem" ? "problem" : "calculator", false);
+})();
+</script>
+
+</body>
+</html>
